@@ -26,9 +26,7 @@ impl TextExtractor {
     pub fn extract_node_text(&mut self, node: Node) {
         match node {
             Node::Heading { nodes, .. } => {
-                for n in nodes {
-                    self.extract_node_text(n)
-                }
+                self.extract_nodes_text(nodes)
             }
 
             Node::CharacterEntity { character, .. } => {
@@ -43,25 +41,19 @@ impl TextExtractor {
 
             Node::Link { text, .. } => {
                 // self.text.push("[".to_string());
-                for n in text {
-                    self.extract_node_text(n)
-                }
+                self.extract_nodes_text(text)
                 // self.text.push("]".to_string());
             }
 
             Node::ExternalLink { nodes, .. } => {
                 // self.text.push("[".to_string());
-                for n in nodes {
-                    self.extract_node_text(n)
-                }
+                self.extract_nodes_text(nodes)
                 // self.text.push("]".to_string());
             }
 
             Node::Image { text, .. } => {
                 self.text.push("[".to_string());
-                for n in text {
-                    self.extract_node_text(n)
-                }
+                self.extract_nodes_text(text);
                 self.text.push("]".to_string());
             }
 
@@ -82,9 +74,7 @@ impl TextExtractor {
             }
 
             Node::Preformatted { nodes, .. } => {
-                for n in nodes {
-                    self.extract_node_text(n)
-                }
+                self.extract_nodes_text(nodes)
             }
 
             Node::Table { .. } => {
@@ -92,9 +82,7 @@ impl TextExtractor {
             }
 
             Node::Tag { nodes, .. } => {
-                for n in nodes {
-                    self.extract_node_text(n)
-                }
+                self.extract_nodes_text(nodes)
             }
 
             Node::StartTag {name, ..} => {
@@ -106,6 +94,12 @@ impl TextExtractor {
             Node::Text { value, .. } => self.text.push(value.to_string()),
 
             _ => {}
+        }
+    }
+
+    pub fn extract_nodes_text(&mut self, nodes: Vec<Node>) {
+        for n in nodes {
+            self.extract_node_text(n)
         }
     }
 
