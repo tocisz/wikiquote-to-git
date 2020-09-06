@@ -36,15 +36,15 @@ impl CiteExtractor {
         CiteExtractor { cites: Vec::new() }
     }
 
-    pub fn extract_cites(&mut self, parsed: Output, title: &str) {
+    pub fn extract_cites(&mut self, parsed: &Output, title: &str) {
         let mut breadcrumbs = Breadcrumbs::new(title);
-        for node in parsed.nodes {
+        for node in &parsed.nodes {
             match node {
                 Node::UnorderedList { items, .. } => {
                     for item in items {
                         let mut extr = TextExtractor::new();
                         extr.descend_lists = false;
-                        extr.extract_item_text(item);
+                        extr.extract_item_text(&item);
                         let mut cite = Cite::new(extr.result());
                         cite.sections = breadcrumbs.stack.clone();
                         self.cites.push(cite);
@@ -53,8 +53,8 @@ impl CiteExtractor {
 
                 Node::Heading {level, nodes, ..} => {
                     let mut extr = TextExtractor::new();
-                    extr.extract_nodes_text(nodes);
-                    breadcrumbs.update(level, extr.result())
+                    extr.extract_nodes_text(&nodes);
+                    breadcrumbs.update(*level, extr.result())
                 }
 
                 _ => {}
