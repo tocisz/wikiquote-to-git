@@ -195,7 +195,7 @@ fn parse(args: Opt, source: impl std::io::BufRead) {
                         let mut extr = CiteExtractor::new();
                         extr.extract_cites(&parsed, &page.title);
                         for cite in extr.cites {
-                            println!("{}\n", cite);
+                            println!("{}", cite);
                         }
                     }
                 }

@@ -27,7 +27,11 @@ impl fmt::Display for Cite {
         if !self.sections.is_empty() {
             writeln!(f, "[{}]", self.sections.join(" / "))?;
         }
-        write!(f, "{}", self.text)
+        writeln!(f, "{}", self.text)?;
+        for (key,value) in &self.meta {
+            writeln!(f, " * {}: {}", key, value)?;
+        }
+        fmt::Result::Ok(())
     }
 }
 
@@ -47,6 +51,11 @@ impl CiteExtractor {
                         extr.extract_item_text(&item);
                         let mut cite = Cite::new(extr.result());
                         cite.sections = breadcrumbs.stack.clone();
+
+                        let mut meta_reader = MetaReader::new();
+                        meta_reader.read(&item.nodes);
+                        cite.meta = meta_reader.meta;
+
                         self.cites.push(cite);
                     }
                 }
@@ -82,6 +91,39 @@ impl Breadcrumbs {
         let last = self.stack.len()-1;
         if let Some(top) = self.stack.get_mut(last) {
             *top = text;
+        }
+    }
+}
+
+#[derive(Debug)]
+struct MetaReader {
+    meta: Vec<(String,String)>
+}
+
+impl MetaReader {
+    pub fn new() -> MetaReader {
+        MetaReader { meta: Vec::new() }
+    }
+
+    pub fn read(&mut self, items: &Vec<Node>) {
+        for item in items {
+            match item {
+                Node::UnorderedList{items, ..} => {
+                    for item in items {
+                        let mut extr = TextExtractor::new();
+                        extr.extract_item_text(item);
+                        let text = extr.result();
+                        let mut parts: Vec<&str> = text.splitn(2, ":").collect();
+                        if parts.len() == 2 {
+                            let second = parts.pop().unwrap().trim().to_string();
+                            let first = parts.pop().unwrap().to_string();
+                            self.meta.push((first, second));
+                        }
+                    }
+                }
+
+                _ => {}
+            }
         }
     }
 }
