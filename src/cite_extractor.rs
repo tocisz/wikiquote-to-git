@@ -1,15 +1,19 @@
 use crate::text_extractor::TextExtractor;
 use parse_wiki_text::{self, Node, Output};
 use std::fmt;
+use serde::Serialize;
+use serde_derive;
 
-pub struct CiteExtractor {
+#[derive(Serialize)]
+pub struct Cites {
     pub cites: Vec<Cite>,
 }
 
+#[derive(Serialize)]
 pub struct Cite {
     pub text: String,
     pub sections: Vec<String>,
-    pub meta: Vec<(String,String)>
+    pub meta: Vec<MetaData>
 }
 
 impl Cite {
@@ -22,22 +26,35 @@ impl Cite {
     }
 }
 
+#[derive(Debug,Serialize)]
+pub struct MetaData {
+    pub key: String,
+    pub value: String,
+    pub links: Vec<String>
+}
+
+impl MetaData {
+    pub fn new(key: String, value: String, links: Vec<String>) -> MetaData {
+        MetaData {key, value, links}
+    }
+}
+
 impl fmt::Display for Cite {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if !self.sections.is_empty() {
             writeln!(f, "[{}]", self.sections.join(" / "))?;
         }
         writeln!(f, "{}", self.text)?;
-        for (key,value) in &self.meta {
+        for MetaData{key, value, ..} in &self.meta {
             writeln!(f, " * {}: {}", key, value)?;
         }
         fmt::Result::Ok(())
     }
 }
 
-impl CiteExtractor {
-    pub fn new() -> CiteExtractor {
-        CiteExtractor { cites: Vec::new() }
+impl Cites {
+    pub fn new() -> Cites {
+        Cites { cites: Vec::new() }
     }
 
     pub fn extract_cites(&mut self, parsed: &Output, title: &str) {
@@ -95,9 +112,8 @@ impl Breadcrumbs {
     }
 }
 
-#[derive(Debug)]
 struct MetaReader {
-    meta: Vec<(String,String)>
+    meta: Vec<MetaData>
 }
 
 impl MetaReader {
@@ -117,7 +133,7 @@ impl MetaReader {
                         if parts.len() == 2 {
                             let second = parts.pop().unwrap().trim().to_string();
                             let first = parts.pop().unwrap().to_string();
-                            self.meta.push((first, second));
+                            self.meta.push(MetaData::new(first, second, vec![]));
                         }
                     }
                 }

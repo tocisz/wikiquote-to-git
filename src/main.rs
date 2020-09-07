@@ -1,7 +1,7 @@
 mod cite_extractor;
 mod text_extractor;
 
-use cite_extractor::CiteExtractor;
+use cite_extractor::Cites;
 use parse_wiki_text::{self, Configuration, ConfigurationSource};
 use structopt::StructOpt;
 
@@ -104,10 +104,11 @@ pub fn create_configuration() -> Configuration {
     })
 }
 
-#[derive(Debug)]
+#[derive(Debug,PartialEq)]
 enum Command {
     LIST,
     PARSE,
+    JSON,
     DEBUG,
 }
 
@@ -120,6 +121,7 @@ impl FromStr for Command {
         match day {
             "list" => Ok(Command::LIST),
             "parse" => Ok(Command::PARSE),
+            "json" => Ok(Command::JSON),
             "debug" => Ok(Command::DEBUG),
             _ => Ok(Command::LIST),
         }
@@ -185,18 +187,23 @@ fn parse(args: Opt, source: impl std::io::BufRead) {
                     );
                 }
 
-                Command::PARSE => {
+                Command::PARSE | Command::JSON => {
                     if page.title == args.search {
                         println!(
                             "{} {} {:?} {:?}",
                             page.namespace, page.title, page.format, page.model
                         );
                         let parsed = create_configuration().parse(&page.text);
-                        let mut extr = CiteExtractor::new();
+                        let mut extr = Cites::new();
                         extr.extract_cites(&parsed, &page.title);
-                        for cite in extr.cites {
-                            println!("{}", cite);
-                        }
+                        if args.command == Command::PARSE {
+                            for cite in extr.cites {
+                                println!("{}", cite);
+                            }
+                        } else {
+                            let ser = serde_json::to_string_pretty(&extr).unwrap();
+                            println!("{}", ser);
+                            }
                     }
                 }
 
