@@ -216,11 +216,10 @@ fn parse(args: Opt, source: impl std::io::BufRead) {
                 Command::CATS => {
                     if page.title.starts_with("Kategoria:") {
                         let site_name = category_graph::after_colon(&page.title);
-                        println!("SITE: {}", site_name);
+                        // println!("SITE: {}", site_name);
                         let parsed = create_configuration().parse(&page.text);
                         category_extractor.set_site(site_name);
                         category_extractor.extract(&parsed);
-                        println!()
                     }
                 }
 
@@ -239,7 +238,10 @@ fn parse(args: Opt, source: impl std::io::BufRead) {
     }
 
     if args.command == Command::CATS {
-        println!("{:?}", category_extractor);
+        //println!("{:?}", category_extractor);
+        use std::fs::File;
+        let mut f = File::create("cats.dot").unwrap();
+        dot::render(&category_extractor.graph, &mut f);
     }
 
 }

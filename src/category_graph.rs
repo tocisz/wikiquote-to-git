@@ -7,7 +7,7 @@ type Nd = usize;
 type Ed = (Nd, Nd);
 
 #[derive(Default,Debug)]
-struct Graph {
+pub struct Graph {
     node_data: Vec<NodeData>,
     node_labels: BiMap<Nd, String>,
     edge_labels: HashMap<Ed, String>
@@ -64,7 +64,7 @@ impl Graph {
 #[derive(Default,Debug)]
 pub struct CategoryExtractor {
     site: String,
-    graph: Graph,
+    pub graph: Graph,
 }
 
 impl CategoryExtractor {
@@ -84,11 +84,11 @@ impl CategoryExtractor {
                 target, ordinal, ..
             } => {
                 let target_name = after_colon(*target);
-                println!("TARGET: {}", target_name);
+                // println!("TARGET: {}", target_name);
                 let mut extr = TextExtractor::new();
                 extr.extract_nodes_text(ordinal);
                 let label = extr.result();
-                println!("ORD: {}", &label);
+                // println!("ORD: {}", &label);
                 self.graph.add(target_name, label, self.site.clone())
             }
             Node::DefinitionList { items, .. } => {
@@ -159,4 +159,32 @@ pub fn after_colon(s: &str) -> String {
     } else {
         "".to_string()
     }
+}
+
+impl<'a> dot::Labeller<'a, Nd, Ed> for Graph {
+    fn graph_id(&'a self) -> dot::Id<'a> { dot::Id::new("categories").unwrap() }
+    fn node_id(&'a self, n: &Nd) -> dot::Id<'a> {
+        dot::Id::new(format!("N{}", n)).unwrap()
+    }
+    fn node_label<'b>(&'b self, n: &Nd) -> dot::LabelText<'b> {
+        dot::LabelText::LabelStr(self.node_labels.get_by_left(n).unwrap().into())
+    }
+    fn edge_label<'b>(&'b self, e: &Ed) -> dot::LabelText<'b> {
+        dot::LabelText::LabelStr(self.edge_labels.get(e).unwrap().into())
+    }
+}
+
+impl<'a> dot::GraphWalk<'a, Nd, Ed> for Graph {
+    fn nodes(&self) -> dot::Nodes<'a,Nd> { (0..self.node_data.len()).collect() }
+    fn edges(&'a self) -> dot::Edges<'a,Ed> {
+        let mut edges: Vec<Ed> = Vec::new();
+        for (n,data) in self.node_data.iter().enumerate() {
+            for m in &data.outgoing {
+                edges.push((n,*m));
+            }
+        }
+        dot::Edges::from(edges)
+    }
+    fn source(&self, e: &Ed) -> Nd { e.0 }
+    fn target(&self, e: &Ed) -> Nd { e.1 }
 }
