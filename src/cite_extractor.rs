@@ -1,8 +1,8 @@
 use crate::text_extractor::TextExtractor;
 use parse_wiki_text::{self, Node, Output};
-use std::fmt;
 use serde::Serialize;
 use serde_derive;
+use std::fmt;
 
 #[derive(Serialize)]
 pub struct Cites {
@@ -13,7 +13,7 @@ pub struct Cites {
 pub struct Cite {
     pub text: String,
     pub sections: Vec<String>,
-    pub meta: Vec<MetaData>
+    pub meta: Vec<MetaData>,
 }
 
 impl Cite {
@@ -21,21 +21,21 @@ impl Cite {
         Cite {
             text,
             sections: Vec::new(),
-            meta: Vec::new()
+            meta: Vec::new(),
         }
     }
 }
 
-#[derive(Debug,Serialize)]
+#[derive(Debug, Serialize)]
 pub struct MetaData {
     pub key: String,
     pub value: String,
-    pub links: Vec<String>
+    pub links: Vec<String>,
 }
 
 impl MetaData {
     pub fn new(key: String, value: String, links: Vec<String>) -> MetaData {
-        MetaData {key, value, links}
+        MetaData { key, value, links }
     }
 }
 
@@ -45,7 +45,7 @@ impl fmt::Display for Cite {
             writeln!(f, "[{}]", self.sections.join(" / "))?;
         }
         writeln!(f, "{}", self.text)?;
-        for MetaData{key, value, ..} in &self.meta {
+        for MetaData { key, value, .. } in &self.meta {
             writeln!(f, " * {}: {}", key, value)?;
         }
         fmt::Result::Ok(())
@@ -77,7 +77,7 @@ impl Cites {
                     }
                 }
 
-                Node::Heading {level, nodes, ..} => {
+                Node::Heading { level, nodes, .. } => {
                     let mut extr = TextExtractor::new();
                     extr.extract_nodes_text(&nodes);
                     breadcrumbs.update(*level, extr.result())
@@ -90,12 +90,14 @@ impl Cites {
 }
 
 struct Breadcrumbs {
-    stack: Vec<String>
+    stack: Vec<String>,
 }
 
 impl Breadcrumbs {
     pub fn new(title: &str) -> Breadcrumbs {
-        Breadcrumbs { stack: vec![title.to_string()] }
+        Breadcrumbs {
+            stack: vec![title.to_string()],
+        }
     }
 
     pub fn update(&mut self, level: u8, text: String) {
@@ -105,7 +107,7 @@ impl Breadcrumbs {
         while self.stack.len() > level as usize {
             self.stack.pop();
         }
-        let last = self.stack.len()-1;
+        let last = self.stack.len() - 1;
         if let Some(top) = self.stack.get_mut(last) {
             *top = text;
         }
@@ -113,7 +115,7 @@ impl Breadcrumbs {
 }
 
 struct MetaReader {
-    meta: Vec<MetaData>
+    meta: Vec<MetaData>,
 }
 
 impl MetaReader {
@@ -124,7 +126,7 @@ impl MetaReader {
     pub fn read(&mut self, items: &Vec<Node>) {
         for item in items {
             match item {
-                Node::UnorderedList{items, ..} => {
+                Node::UnorderedList { items, .. } => {
                     for item in items {
                         let mut extr = TextExtractor::new();
                         extr.extract_item_text(item);

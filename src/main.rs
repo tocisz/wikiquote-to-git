@@ -1,3 +1,4 @@
+mod category_graph;
 mod cite_extractor;
 mod text_extractor;
 
@@ -104,16 +105,18 @@ pub fn create_configuration() -> Configuration {
     })
 }
 
-#[derive(Debug,PartialEq)]
+#[derive(Debug, PartialEq)]
 enum Command {
     LIST,
     PARSE,
     JSON,
     DEBUG,
+    CATS
 }
 
 use std::str::FromStr;
 use std::string::ParseError;
+use crate::category_graph::CategoryExtractor;
 
 impl FromStr for Command {
     type Err = ParseError;
@@ -123,6 +126,7 @@ impl FromStr for Command {
             "parse" => Ok(Command::PARSE),
             "json" => Ok(Command::JSON),
             "debug" => Ok(Command::DEBUG),
+            "cats" => Ok(Command::CATS),
             _ => Ok(Command::LIST),
         }
     }
@@ -173,6 +177,8 @@ fn main() {
 }
 
 fn parse(args: Opt, source: impl std::io::BufRead) {
+    let mut category_extractor = CategoryExtractor::default();
+
     for result in parse_mediawiki_dump::parse(source) {
         match result {
             Err(error) => {
@@ -203,7 +209,18 @@ fn parse(args: Opt, source: impl std::io::BufRead) {
                         } else {
                             let ser = serde_json::to_string_pretty(&extr).unwrap();
                             println!("{}", ser);
-                            }
+                        }
+                    }
+                }
+
+                Command::CATS => {
+                    if page.title.starts_with("Kategoria:") {
+                        let site_name = category_graph::after_colon(&page.title);
+                        println!("SITE: {}", site_name);
+                        let parsed = create_configuration().parse(&page.text);
+                        category_extractor.set_site(site_name);
+                        category_extractor.extract(&parsed);
+                        println!()
                     }
                 }
 
@@ -217,8 +234,12 @@ fn parse(args: Opt, source: impl std::io::BufRead) {
                         println!("{:?}\n", parsed);
                     }
                 }
-
             },
         }
     }
+
+    if args.command == Command::CATS {
+        println!("{:?}", category_extractor);
+    }
+
 }

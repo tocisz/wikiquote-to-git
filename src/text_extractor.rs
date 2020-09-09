@@ -25,13 +25,9 @@ impl TextExtractor {
 
     pub fn extract_node_text(&mut self, node: &Node) {
         match node {
-            Node::Heading { nodes, .. } => {
-                self.extract_nodes_text(nodes)
-            }
+            Node::Heading { nodes, .. } => self.extract_nodes_text(nodes),
 
-            Node::CharacterEntity { character, .. } => {
-                self.text.push(character.to_string())
-            }
+            Node::CharacterEntity { character, .. } => self.text.push(character.to_string()),
 
             Node::DefinitionList { items, .. } => {
                 for n in items {
@@ -73,19 +69,15 @@ impl TextExtractor {
                 }
             }
 
-            Node::Preformatted { nodes, .. } => {
-                self.extract_nodes_text(nodes)
-            }
+            Node::Preformatted { nodes, .. } => self.extract_nodes_text(nodes),
 
             Node::Table { .. } => {
                 // TODO?
             }
 
-            Node::Tag { nodes, .. } => {
-                self.extract_nodes_text(nodes)
-            }
+            Node::Tag { nodes, .. } => self.extract_nodes_text(nodes),
 
-            Node::StartTag {name, ..} => {
+            Node::StartTag { name, .. } => {
                 if name == "br" {
                     self.text.push("\n".to_string())
                 }
