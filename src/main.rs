@@ -112,13 +112,13 @@ enum Command {
     PARSE,
     JSON,
     DEBUG,
-    CATS
+    CATS,
 }
 
-use std::str::FromStr;
-use std::string::ParseError;
 use crate::category_graph::CategoryExtractor;
 use std::error::Error;
+use std::str::FromStr;
+use std::string::ParseError;
 
 impl FromStr for Command {
     type Err = ParseError;
@@ -179,11 +179,11 @@ fn main() {
 
     match result {
         Ok(()) => {}
-        Err(e) => eprintln!("ERROR: {}", e)
+        Err(e) => eprintln!("ERROR: {}", e),
     }
 }
 
-fn parse(args: Opt, source: impl std::io::BufRead) -> Result<(),Box<dyn Error>> {
+fn parse(args: Opt, source: impl std::io::BufRead) -> Result<(), Box<dyn Error>> {
     let mut category_extractor = CategoryExtractor::default();
 
     for result in parse_mediawiki_dump::parse(source) {
@@ -222,7 +222,7 @@ fn parse(args: Opt, source: impl std::io::BufRead) -> Result<(),Box<dyn Error>> 
 
                 Command::CATS => {
                     if page.title.starts_with("Kategoria:") {
-                        let site_name = category_graph::after_colon(&page.title);
+                        let site_name = category_extractor.normalizer.normalize_category_name(&page.title);
                         // println!("SITE: {}", site_name);
                         let parsed = create_configuration().parse(&page.text);
                         category_extractor.set_site(site_name);
@@ -245,10 +245,17 @@ fn parse(args: Opt, source: impl std::io::BufRead) -> Result<(),Box<dyn Error>> 
     }
 
     if args.command == Command::CATS {
-        //println!("{:?}", category_extractor);
-        use std::fs::File;
-        let mut f = File::create("cats.dot").unwrap();
-        dot::render(&category_extractor.graph, &mut f)?;
+        // use std::fs::File;
+        // let mut f = File::create("cats.dot").unwrap();
+        // dot::render(&category_extractor.graph, &mut f)?;
+
+        let roots = category_extractor.graph.roots();
+        for r in roots {
+            let label = category_extractor.graph.get_vertex_label(r);
+            println!("{}: {}", r, label);
+            let lu8 = label.as_bytes();
+            println!("{:x?}", lu8);
+        }
     }
 
     Result::Ok(())

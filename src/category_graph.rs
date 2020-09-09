@@ -1,26 +1,28 @@
 use crate::text_extractor::TextExtractor;
 use bimap::BiMap;
 use parse_wiki_text::{DefinitionListItem, ListItem, Node, Output};
+use regex::{Regex, RegexBuilder};
 use std::collections::HashMap;
+use std::fmt::Debug;
+use serde::export::Formatter;
 
 type Nd = usize;
 type Ed = (Nd, Nd);
 
-#[derive(Default,Debug)]
+#[derive(Default, Debug)]
 pub struct Graph {
     node_data: Vec<NodeData>,
     node_labels: BiMap<Nd, String>,
-    edge_labels: HashMap<Ed, String>
+    edge_labels: HashMap<Ed, String>,
 }
 
-#[derive(Default,Debug)]
+#[derive(Default, Debug)]
 struct NodeData {
     outgoing: Vec<usize>,
     incoming: Vec<usize>,
 }
 
 impl Graph {
-
     pub fn add_vertex(&mut self, label: String) -> Nd {
         let new_idx = self.node_data.len();
         self.node_data.push(NodeData::default());
@@ -54,12 +56,27 @@ impl Graph {
             self.add_vertex(label)
         }
     }
+
+    pub fn roots(&self) -> Vec<Nd> {
+        let mut result = Vec::new();
+        for (i, n) in self.node_data.iter().enumerate() {
+            if n.incoming.is_empty() {
+                result.push(i);
+            }
+        }
+        result
+    }
+
+    pub fn get_vertex_label(&self, id: Nd) -> &str {
+        self.node_labels.get_by_left(&id).unwrap()
+    }
 }
 
-#[derive(Default,Debug)]
+#[derive(Default, Debug)]
 pub struct CategoryExtractor {
     site: String,
     pub graph: Graph,
+    pub normalizer: Normalizer
 }
 
 impl CategoryExtractor {
@@ -78,11 +95,11 @@ impl CategoryExtractor {
             Node::Category {
                 target, ordinal, ..
             } => {
-                let target_name = after_colon(*target);
+                let target_name = self.normalizer.normalize_category_name(*target);
                 // println!("TARGET: {}", target_name);
                 let mut extr = TextExtractor::new();
                 extr.extract_nodes_text(ordinal);
-                let label = extr.result();
+                let label = extr.result().trim().to_string();
                 // println!("ORD: {}", &label);
                 self.graph.add(target_name, label, self.site.clone())
             }
@@ -148,38 +165,85 @@ impl CategoryExtractor {
     }
 }
 
-pub fn after_colon(s: &str) -> String {
-    if let Some(idx) = s.find(":") {
-        s[(idx+1)..].to_string()
-    } else {
-        "".to_string()
+pub struct Normalizer {
+    kat_match: Regex,
+    space_match: Regex,
+    bad_chars: Vec<&'static str>,
+}
+
+impl Default for Normalizer {
+    fn default() -> Self {
+        let left_to_right = "\u{200E}";
+        Self {
+            kat_match: RegexBuilder::new(r"^Kategoria:")
+                .case_insensitive(true)
+                .build()
+                .unwrap(),
+
+            space_match: Regex::new(r"\s+").unwrap(),
+
+            bad_chars: vec!(left_to_right),
+        }
+    }
+}
+
+impl Normalizer {
+    pub fn normalize_category_name(&self, s: &str) -> String {
+        let mut s = s;
+        if self.kat_match.is_match(s) {
+            s = &s[10..];
+        } else {
+            s = s;
+        }
+        s = s.trim();
+        let s = self.space_match.replace_all(s, " ");
+        let mut s = s.to_string();
+        for ch in &self.bad_chars {
+            s = s.replace(*ch, "");
+        }
+        s
+    }
+}
+
+// Don't display it
+impl Debug for Normalizer {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
+        Result::Ok(())
     }
 }
 
 impl<'a> dot::Labeller<'a, Nd, Ed> for Graph {
-    fn graph_id(&'a self) -> dot::Id<'a> { dot::Id::new("categories").unwrap() }
+    fn graph_id(&'a self) -> dot::Id<'a> {
+        dot::Id::new("categories").unwrap()
+    }
     fn node_id(&'a self, n: &Nd) -> dot::Id<'a> {
         dot::Id::new(format!("N{}", n)).unwrap()
     }
-    fn node_label<'b>(&'b self, n: &Nd) -> dot::LabelText<'b> {
+    fn node_label(&self, n: &Nd) -> dot::LabelText {
         dot::LabelText::LabelStr(self.node_labels.get_by_left(n).unwrap().into())
     }
-    fn edge_label<'b>(&'b self, e: &Ed) -> dot::LabelText<'b> {
+    fn edge_label(&self, e: &Ed) -> dot::LabelText {
         dot::LabelText::LabelStr(self.edge_labels.get(e).unwrap().into())
     }
 }
 
 impl<'a> dot::GraphWalk<'a, Nd, Ed> for Graph {
-    fn nodes(&self) -> dot::Nodes<'a,Nd> { (0..self.node_data.len()).collect() }
-    fn edges(&'a self) -> dot::Edges<'a,Ed> {
+    fn nodes(&self) -> dot::Nodes<'a, Nd> {
+        (0..self.node_data.len()).collect()
+    }
+    fn edges(&'a self) -> dot::Edges<'a, Ed> {
         let mut edges: Vec<Ed> = Vec::new();
-        for (n,data) in self.node_data.iter().enumerate() {
+        for (n, data) in self.node_data.iter().enumerate() {
             for m in &data.outgoing {
-                edges.push((n,*m));
+                edges.push((n, *m));
             }
         }
         dot::Edges::from(edges)
     }
-    fn source(&self, e: &Ed) -> Nd { e.0 }
-    fn target(&self, e: &Ed) -> Nd { e.1 }
+    fn source(&self, e: &Ed) -> Nd {
+        e.0
+    }
+    fn target(&self, e: &Ed) -> Nd {
+        e.1
+    }
 }
