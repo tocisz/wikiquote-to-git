@@ -20,11 +20,6 @@ struct NodeData {
 }
 
 impl Graph {
-    pub fn new() -> Self {
-        Self {
-            ..Default::default()
-        }
-    }
 
     pub fn add_vertex(&mut self, label: String) -> Nd {
         let new_idx = self.node_data.len();

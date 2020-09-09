@@ -117,6 +117,7 @@ enum Command {
 use std::str::FromStr;
 use std::string::ParseError;
 use crate::category_graph::CategoryExtractor;
+use std::error::Error;
 
 impl FromStr for Command {
     type Err = ParseError;
@@ -166,17 +167,22 @@ fn main() {
         }
         Ok(file) => std::io::BufReader::new(file),
     };
-    if cfg.datafile.ends_with(".bz2") {
+    let result = if cfg.datafile.ends_with(".bz2") {
         parse(
             args,
             std::io::BufReader::new(bzip2::bufread::BzDecoder::new(file)),
-        );
+        )
     } else {
-        parse(args, file);
+        parse(args, file)
+    };
+
+    match result {
+        Ok(()) => {}
+        Err(e) => eprintln!("ERROR: {}", e)
     }
 }
 
-fn parse(args: Opt, source: impl std::io::BufRead) {
+fn parse(args: Opt, source: impl std::io::BufRead) -> Result<(),Box<dyn Error>> {
     let mut category_extractor = CategoryExtractor::default();
 
     for result in parse_mediawiki_dump::parse(source) {
@@ -241,7 +247,8 @@ fn parse(args: Opt, source: impl std::io::BufRead) {
         //println!("{:?}", category_extractor);
         use std::fs::File;
         let mut f = File::create("cats.dot").unwrap();
-        dot::render(&category_extractor.graph, &mut f);
+        dot::render(&category_extractor.graph, &mut f)?;
     }
 
+    Result::Ok(())
 }

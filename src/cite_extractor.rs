@@ -1,7 +1,6 @@
 use crate::text_extractor::TextExtractor;
 use parse_wiki_text::{self, Node, Output};
 use serde::Serialize;
-use serde_derive;
 use std::fmt;
 
 #[derive(Serialize)]

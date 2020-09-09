@@ -1,4 +1,4 @@
-use parse_wiki_text::{self, DefinitionListItem, ListItem, Node, Output};
+use parse_wiki_text::{self, DefinitionListItem, ListItem, Node};
 
 pub struct TextExtractor {
     pub text: Vec<String>,
@@ -17,12 +17,12 @@ impl TextExtractor {
         self.text.join("")
     }
 
-    pub fn extract_text(&mut self, parsed: &Output) {
+/*    pub fn extract_text(&mut self, parsed: &Output) {
         for n in &parsed.nodes {
             self.extract_node_text(n)
         }
     }
-
+*/
     pub fn extract_node_text(&mut self, node: &Node) {
         match node {
             Node::Heading { nodes, .. } => self.extract_nodes_text(nodes),
