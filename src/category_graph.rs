@@ -1,10 +1,11 @@
 use crate::text_extractor::TextExtractor;
 use bimap::BiMap;
+use bit_vec::BitVec;
 use parse_wiki_text::{DefinitionListItem, ListItem, Node, Output};
 use regex::{Regex, RegexBuilder};
+use serde::export::Formatter;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use serde::export::Formatter;
 
 type Nd = usize;
 type Ed = (Nd, Nd);
@@ -23,6 +24,10 @@ struct NodeData {
 }
 
 impl Graph {
+    pub fn len(&self) -> usize {
+        self.node_data.len()
+    }
+
     pub fn add_vertex(&mut self, label: String) -> Nd {
         let new_idx = self.node_data.len();
         self.node_data.push(NodeData::default());
@@ -70,13 +75,43 @@ impl Graph {
     pub fn get_vertex_label(&self, id: Nd) -> &str {
         self.node_labels.get_by_left(&id).unwrap()
     }
+
+    pub fn walk_dfs_post_order<F>(&self, start: Nd, f: F) -> usize
+    where
+        F: Fn(Nd) -> (),
+    {
+        let mut visited = BitVec::with_capacity(self.node_data.len());
+        visited.grow(self.node_data.len(), false); // none visited
+        let mut stack: Vec<(Nd, bool)> = Vec::new();
+        stack.push((start, false));
+        while !stack.is_empty() {
+            let (node, children_visited) = stack.pop().unwrap();
+            visited.set(node, true);
+            if !children_visited {
+                stack.push((node, true));
+                for n in &self.node_data[node].outgoing {
+                    if !visited.get(*n).unwrap() {
+                        stack.push((*n, false));
+                    }
+                }
+            } else {
+                // all children are visited, so call function (post order)
+                f(node);
+            }
+        }
+        let mut cnt: usize = 0;
+        for b in visited.blocks() {
+            cnt += b.count_ones() as usize;
+        }
+        cnt
+    }
 }
 
 #[derive(Default, Debug)]
 pub struct CategoryExtractor {
     site: String,
     pub graph: Graph,
-    pub normalizer: Normalizer
+    pub normalizer: Normalizer,
 }
 
 impl CategoryExtractor {
@@ -182,7 +217,7 @@ impl Default for Normalizer {
 
             space_match: Regex::new(r"\s+").unwrap(),
 
-            bad_chars: vec!(left_to_right),
+            bad_chars: vec![left_to_right],
         }
     }
 }

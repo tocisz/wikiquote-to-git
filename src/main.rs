@@ -222,7 +222,9 @@ fn parse(args: Opt, source: impl std::io::BufRead) -> Result<(), Box<dyn Error>>
 
                 Command::CATS => {
                     if page.title.starts_with("Kategoria:") {
-                        let site_name = category_extractor.normalizer.normalize_category_name(&page.title);
+                        let site_name = category_extractor
+                            .normalizer
+                            .normalize_category_name(&page.title);
                         // println!("SITE: {}", site_name);
                         let parsed = create_configuration().parse(&page.text);
                         category_extractor.set_site(site_name);
@@ -250,11 +252,22 @@ fn parse(args: Opt, source: impl std::io::BufRead) -> Result<(), Box<dyn Error>>
         // dot::render(&category_extractor.graph, &mut f)?;
 
         let roots = category_extractor.graph.roots();
-        for r in roots {
-            let label = category_extractor.graph.get_vertex_label(r);
+        for r in &roots {
+            let label = category_extractor.graph.get_vertex_label(*r);
             println!("{}: {}", r, label);
             let lu8 = label.as_bytes();
             println!("{:x?}", lu8);
+        }
+
+        if let Some(root) = roots.get(0) {
+            let cnt = category_extractor.graph.walk_dfs_post_order(*root, |n| {
+                println!("{}", category_extractor.graph.get_vertex_label(n));
+            });
+            println!(
+                "Visited {} out of {} nodes.",
+                cnt,
+                category_extractor.graph.len()
+            )
         }
     }
 
