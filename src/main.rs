@@ -115,7 +115,9 @@ enum Command {
     CATS,
 }
 
-use crate::category_graph::CategoryExtractor;
+use crate::category_graph::{CategoryExtractor, Graph};
+use git2::{Oid, Repository, Signature};
+use std::collections::HashMap;
 use std::error::Error;
 use std::str::FromStr;
 use std::string::ParseError;
@@ -252,17 +254,45 @@ fn parse(args: Opt, source: impl std::io::BufRead) -> Result<(), Box<dyn Error>>
         // dot::render(&category_extractor.graph, &mut f)?;
 
         let roots = category_extractor.graph.roots();
-        for r in &roots {
-            let label = category_extractor.graph.get_vertex_label(*r);
-            println!("{}: {}", r, label);
-            let lu8 = label.as_bytes();
-            println!("{:x?}", lu8);
-        }
+        // for r in &roots {
+        //     let label = category_extractor.graph.get_vertex_label(*r);
+        //     println!("{}: {}", r, label);
+        //     let lu8 = label.as_bytes();
+        //     println!("{:x?}", lu8);
+        // }
 
         if let Some(root) = roots.get(0) {
-            let cnt = category_extractor.graph.walk_dfs_post_order(*root, |n| {
-                println!("{}", category_extractor.graph.get_vertex_label(n));
+            let repo = Repository::init("../wikiquotes-repo2")?;
+            let mut hashes: HashMap<category_graph::Nd, Oid> = HashMap::new();
+
+            let cnt = category_extractor.graph.walk_dfs_post_order(*root, |n, forbidden| {
+                let v_label = category_extractor.graph.get_vertex_label(n);
+                println!("visiting {}", n);
+                let name_blob = repo.blob(v_label.as_bytes()).unwrap();
+                let mut builder = repo.treebuilder(None).unwrap();
+                builder.insert("name.txt", name_blob, 0o100644).unwrap();
+                let data = &category_extractor.graph.node_data[n];
+                for out in &data.outgoing {
+                    if !forbidden.contains(out) {
+                        let name = get_git_file_name(&category_extractor.graph, n, *out);
+                        println!("insert {}", out);
+                        let h = hashes.get(out).expect("Children should be already added");
+                        builder.insert(name, *h, 0o040000).unwrap();
+                    }
+                }
+                let tree = builder.write().unwrap();
+                hashes.insert(n, tree);
             });
+
+            let root_h = hashes.get(root).unwrap();
+            let root_t = repo.find_tree(*root_h)?;
+            let signature = Signature::now("Tomasz", "x@y.com")?;
+            let commit = repo.commit(None, &signature, &signature, "test", &root_t, &[])?;
+            println!("commit is {}", commit.to_string());
+
+            let c = repo.find_commit(commit)?;
+            repo.branch("master", &c, false)?;
+
             println!(
                 "Visited {} out of {} nodes.",
                 cnt,
@@ -272,4 +302,14 @@ fn parse(args: Opt, source: impl std::io::BufRead) -> Result<(), Box<dyn Error>>
     }
 
     Result::Ok(())
+}
+
+fn get_git_file_name(graph: &Graph, from: category_graph::Nd, to: category_graph::Nd) -> String {
+    let el = graph.get_edge_label(&(from, to));
+    let name = if !el.is_empty() {
+        el
+    } else {
+        graph.get_vertex_label(to)
+    };
+    name.replace("/", "-")
 }

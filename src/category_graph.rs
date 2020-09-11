@@ -4,23 +4,23 @@ use bit_vec::BitVec;
 use parse_wiki_text::{DefinitionListItem, ListItem, Node, Output};
 use regex::{Regex, RegexBuilder};
 use serde::export::Formatter;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 
-type Nd = usize;
-type Ed = (Nd, Nd);
+pub type Nd = usize;
+pub type Ed = (Nd, Nd);
 
 #[derive(Default, Debug)]
 pub struct Graph {
-    node_data: Vec<NodeData>,
+    pub node_data: Vec<NodeData>,
     node_labels: BiMap<Nd, String>,
     edge_labels: HashMap<Ed, String>,
 }
 
 #[derive(Default, Debug)]
-struct NodeData {
-    outgoing: Vec<usize>,
-    incoming: Vec<usize>,
+pub struct NodeData {
+    pub outgoing: Vec<usize>,
+    pub incoming: Vec<usize>,
 }
 
 impl Graph {
@@ -76,29 +76,50 @@ impl Graph {
         self.node_labels.get_by_left(&id).unwrap()
     }
 
-    pub fn walk_dfs_post_order<F>(&self, start: Nd, f: F) -> usize
+    pub fn get_edge_label(&self, e: &Ed) -> &str {
+        self.edge_labels.get(e).unwrap()
+    }
+
+    pub fn walk_dfs_post_order<F>(&self, start: Nd, mut f: F) -> usize
     where
-        F: Fn(Nd) -> (),
+        F: FnMut(Nd, &Vec<Nd>) -> (),
     {
-        let mut visited = BitVec::with_capacity(self.node_data.len());
-        visited.grow(self.node_data.len(), false); // none visited
-        let mut stack: Vec<(Nd, bool)> = Vec::new();
-        stack.push((start, false));
+        let mut visited = BitVec::from_elem(self.node_data.len(), false);
+        let mut stack: Vec<(Nd, usize)> = Vec::new(); // (node, children_visited)
+        let mut path: HashSet<usize> = HashSet::new();
+        let mut edge_cuts: HashMap<usize,Vec<usize>> = HashMap::new();
+        stack.push((start, 0));
         while !stack.is_empty() {
             let (node, children_visited) = stack.pop().unwrap();
+            path.insert(node);
+            // println!("pop {}", node);
             visited.set(node, true);
-            if !children_visited {
-                stack.push((node, true));
-                for n in &self.node_data[node].outgoing {
-                    if !visited.get(*n).unwrap() {
-                        stack.push((*n, false));
+            if children_visited < self.node_data[node].outgoing.len() {
+                stack.push((node, children_visited + 1));
+                let next_child = self.node_data[node].outgoing[children_visited];
+                if path.contains(&next_child) {
+                    println!("Found loop between {} and {}", node, next_child);
+                    match edge_cuts.get_mut(&node) {
+                        None => {
+                            edge_cuts.insert(node, vec![next_child]);
+                        },
+                        Some(v) => {
+                            v.push(next_child);
+                        },
                     }
+                }
+                if !visited.get(next_child).unwrap() {
+                    stack.push((next_child, 0));
                 }
             } else {
                 // all children are visited, so call function (post order)
-                f(node);
+                let empty: Vec<usize> = vec![];
+                let forbidden = edge_cuts.get(&node).unwrap_or(&empty);
+                f(node, forbidden);
+                path.remove(&node);
             }
         }
+
         let mut cnt: usize = 0;
         for b in visited.blocks() {
             cnt += b.count_ones() as usize;
