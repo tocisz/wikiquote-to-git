@@ -5,6 +5,7 @@ use parse_wiki_text::{DefinitionListItem, ListItem, Node, Output};
 use regex::{Regex, RegexBuilder};
 use serde::export::Formatter;
 use std::collections::{HashMap, HashSet};
+use std::error::Error;
 use std::fmt::Debug;
 
 pub type Nd = usize;
@@ -80,14 +81,14 @@ impl Graph {
         self.edge_labels.get(e).unwrap()
     }
 
-    pub fn walk_dfs_post_order<F>(&self, start: Nd, mut f: F) -> usize
+    pub fn walk_dfs_post_order<F>(&self, start: Nd, mut f: F) -> Result<usize, Box<dyn Error>>
     where
-        F: FnMut(Nd, &Vec<Nd>) -> (),
+        F: FnMut(Nd, &Vec<Nd>) -> Result<(), Box<dyn Error>>,
     {
         let mut visited = BitVec::from_elem(self.node_data.len(), false);
         let mut stack: Vec<(Nd, usize)> = Vec::new(); // (node, children_visited)
         let mut path: HashSet<usize> = HashSet::new();
-        let mut edge_cuts: HashMap<usize,Vec<usize>> = HashMap::new();
+        let mut edge_cuts: HashMap<usize, Vec<usize>> = HashMap::new();
         stack.push((start, 0));
         while !stack.is_empty() {
             let (node, children_visited) = stack.pop().unwrap();
@@ -98,14 +99,19 @@ impl Graph {
                 stack.push((node, children_visited + 1));
                 let next_child = self.node_data[node].outgoing[children_visited];
                 if path.contains(&next_child) {
-                    println!("Found loop between {} and {}", node, next_child);
+                    let node_label = self.get_vertex_label(node);
+                    let child_label = self.get_vertex_label(next_child);
+                    println!(
+                        "Found loop between '{}' ({}) and '{}' ({})",
+                        node_label, node, child_label, next_child
+                    );
                     match edge_cuts.get_mut(&node) {
                         None => {
                             edge_cuts.insert(node, vec![next_child]);
-                        },
+                        }
                         Some(v) => {
                             v.push(next_child);
-                        },
+                        }
                     }
                 }
                 if !visited.get(next_child).unwrap() {
@@ -115,7 +121,7 @@ impl Graph {
                 // all children are visited, so call function (post order)
                 let empty: Vec<usize> = vec![];
                 let forbidden = edge_cuts.get(&node).unwrap_or(&empty);
-                f(node, forbidden);
+                f(node, forbidden)?;
                 path.remove(&node);
             }
         }
@@ -124,7 +130,7 @@ impl Graph {
         for b in visited.blocks() {
             cnt += b.count_ones() as usize;
         }
-        cnt
+        Ok(cnt)
     }
 }
 

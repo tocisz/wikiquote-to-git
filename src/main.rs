@@ -261,30 +261,40 @@ fn parse(args: Opt, source: impl std::io::BufRead) -> Result<(), Box<dyn Error>>
         //     println!("{:x?}", lu8);
         // }
 
-        if let Some(root) = roots.get(0) {
-            let repo = Repository::init("../wikiquotes-repo2")?;
+        let found_root = if !args.search.is_empty() {
+            match category_extractor.graph.find_vertex(&args.search) {
+                None => roots.get(0).map(|x|*x),
+                some => some,
+            }
+        } else {
+            roots.get(0).map(|x|*x)
+        };
+
+        if let Some(root) = found_root {
+            let repo = Repository::init("../wikiquotes-repo")?;
             let mut hashes: HashMap<category_graph::Nd, Oid> = HashMap::new();
 
-            let cnt = category_extractor.graph.walk_dfs_post_order(*root, |n, forbidden| {
-                let v_label = category_extractor.graph.get_vertex_label(n);
-                println!("visiting {}", n);
-                let name_blob = repo.blob(v_label.as_bytes()).unwrap();
-                let mut builder = repo.treebuilder(None).unwrap();
-                builder.insert("name.txt", name_blob, 0o100644).unwrap();
-                let data = &category_extractor.graph.node_data[n];
-                for out in &data.outgoing {
-                    if !forbidden.contains(out) {
-                        let name = get_git_file_name(&category_extractor.graph, n, *out);
-                        println!("insert {}", out);
-                        let h = hashes.get(out).expect("Children should be already added");
-                        builder.insert(name, *h, 0o040000).unwrap();
+            let cnt = category_extractor
+                .graph
+                .walk_dfs_post_order(root, |n, forbidden| {
+                    let v_label = category_extractor.graph.get_vertex_label(n);
+                    let name_blob = repo.blob(v_label.as_bytes())?;
+                    let mut builder = repo.treebuilder(None)?;
+                    builder.insert("name.txt", name_blob, 0o100644)?;
+                    let data = &category_extractor.graph.node_data[n];
+                    for out in &data.outgoing {
+                        if !forbidden.contains(out) {
+                            let name = get_git_file_name(&category_extractor.graph, n, *out);
+                            let h = hashes.get(out).expect("Children should be already added");
+                            builder.insert(name, *h, 0o040000)?;
+                        }
                     }
-                }
-                let tree = builder.write().unwrap();
-                hashes.insert(n, tree);
-            });
+                    let tree = builder.write()?;
+                    hashes.insert(n, tree);
+                    Ok(())
+                })?;
 
-            let root_h = hashes.get(root).unwrap();
+            let root_h = hashes.get(&root).unwrap();
             let root_t = repo.find_tree(*root_h)?;
             let signature = Signature::now("Tomasz", "x@y.com")?;
             let commit = repo.commit(None, &signature, &signature, "test", &root_t, &[])?;
@@ -298,6 +308,8 @@ fn parse(args: Opt, source: impl std::io::BufRead) -> Result<(), Box<dyn Error>>
                 cnt,
                 category_extractor.graph.len()
             )
+        } else {
+            println!("No start category given.")
         }
     }
 
