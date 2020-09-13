@@ -116,9 +116,12 @@ enum Command {
 }
 
 use crate::category_graph::{CategoryExtractor, Graph};
+use bit_vec::BitVec;
 use git2::{Oid, Repository, Signature};
+use serde::export::Formatter;
 use std::collections::HashMap;
 use std::error::Error;
+use std::fmt::Display;
 use std::str::FromStr;
 use std::string::ParseError;
 
@@ -163,31 +166,121 @@ fn main() {
     let cfg = Config::default();
     let args: Opt = Opt::from_args();
 
-    let file = match std::fs::File::open(&cfg.datafile) {
-        Err(error) => {
-            eprintln!("Failed to open input file: {}", error);
-            std::process::exit(1);
-        }
-        Ok(file) => std::io::BufReader::new(file),
-    };
-    let result = if cfg.datafile.ends_with(".bz2") {
-        parse(
-            args,
-            std::io::BufReader::new(bzip2::bufread::BzDecoder::new(file)),
-        )
-    } else {
-        parse(args, file)
-    };
-
-    match result {
+    match do_main(cfg, args) {
         Ok(()) => {}
         Err(e) => eprintln!("ERROR: {}", e),
     }
 }
 
-fn parse(args: Opt, source: impl std::io::BufRead) -> Result<(), Box<dyn Error>> {
-    let mut category_extractor = CategoryExtractor::default();
+struct CategoryData (
+    Graph, category_graph::Nd, BitVec
+);
 
+fn do_main(cfg: Config, args: Opt) -> Result<(), Box<dyn Error>> {
+    if args.command == Command::CATS {
+        let cat_data = process_categories(&args, get_reader(&cfg)?)?;
+        store_categories_in_git(cat_data)?;
+    } else {
+        add_articles(&args, get_reader(&cfg)?)?;
+    }
+    Ok(())
+}
+
+fn get_reader(cfg: &Config) -> Result<Box<dyn std::io::BufRead>, Box<dyn Error>> {
+    let file = std::io::BufReader::new(std::fs::File::open(&cfg.datafile)?);
+
+    let reader: Box<dyn std::io::BufRead> = if cfg.datafile.ends_with(".bz2") {
+        Box::new(std::io::BufReader::new(bzip2::bufread::BzDecoder::new(
+            file,
+        )))
+    } else {
+        Box::new(file)
+    };
+
+    Result::Ok(reader)
+}
+
+// fn process_stream(args: Opt, source: impl std::io::BufRead) -> Result<(), Box<dyn Error>> {
+//     source.c
+//     // let (cats, selected_cats)
+// }
+
+#[derive(Debug, Default)]
+struct NoRootCategoryError;
+
+impl Display for NoRootCategoryError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "No root category found!")
+    }
+}
+
+impl Error for NoRootCategoryError {}
+
+#[derive(Debug)]
+struct MediawikiParseError(parse_mediawiki_dump::Error);
+
+impl Display for MediawikiParseError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Mediawiki parse error: ")?;
+        self.0.fmt(f)
+    }
+}
+
+impl Error for MediawikiParseError {}
+
+fn process_categories(
+    args: &Opt,
+    source: impl std::io::BufRead,
+) -> Result<CategoryData, Box<dyn Error>> {
+    let mut category_extractor = CategoryExtractor::default();
+    for result in parse_mediawiki_dump::parse(source) {
+        match result {
+            Err(error) => return Err(Box::new(MediawikiParseError(error))),
+            Ok(page) => {
+                if page.title.starts_with("Kategoria:") {
+                    let site_name = category_extractor
+                        .normalizer
+                        .normalize_category_name(&page.title);
+                    // println!("SITE: {}", site_name);
+                    let parsed = create_configuration().parse(&page.text);
+                    category_extractor.set_site(site_name);
+                    category_extractor.extract(&parsed);
+                };
+            }
+        }
+    }
+
+    let found_root = if !args.search.is_empty() {
+        match category_extractor.graph.find_vertex(&args.search) {
+            None => {
+                let roots = category_extractor.graph.roots();
+                roots.get(0).map(|x| *x)
+            }
+            some => some,
+        }
+    } else {
+        let roots = category_extractor.graph.roots();
+        roots.get(0).map(|x| *x)
+    };
+
+    if let Some(root) = found_root {
+        let visited = category_extractor
+            .graph
+            .walk_dfs_post_order(root, |_, _| Result::Ok(()))?;
+
+        println!(
+            "Visited {} out of {} nodes.",
+            count_ones(&visited),
+            category_extractor.graph.len()
+        );
+
+        Result::Ok(CategoryData(category_extractor.graph, root, visited))
+    } else {
+        Result::Err(Box::new(NoRootCategoryError::default()))
+    }
+}
+
+fn add_articles(args: &Opt, source: impl std::io::BufRead) -> Result<(), Box<dyn Error>> {
     for result in parse_mediawiki_dump::parse(source) {
         match result {
             Err(error) => {
@@ -222,18 +315,6 @@ fn parse(args: Opt, source: impl std::io::BufRead) -> Result<(), Box<dyn Error>>
                     }
                 }
 
-                Command::CATS => {
-                    if page.title.starts_with("Kategoria:") {
-                        let site_name = category_extractor
-                            .normalizer
-                            .normalize_category_name(&page.title);
-                        // println!("SITE: {}", site_name);
-                        let parsed = create_configuration().parse(&page.text);
-                        category_extractor.set_site(site_name);
-                        category_extractor.extract(&parsed);
-                    }
-                }
-
                 Command::DEBUG => {
                     if page.title == args.search {
                         println!(
@@ -244,76 +325,50 @@ fn parse(args: Opt, source: impl std::io::BufRead) -> Result<(), Box<dyn Error>>
                         println!("{:?}\n", parsed);
                     }
                 }
+
+                _ => {}
             },
         }
     }
 
-    if args.command == Command::CATS {
-        // use std::fs::File;
-        // let mut f = File::create("cats.dot").unwrap();
-        // dot::render(&category_extractor.graph, &mut f)?;
-
-        let roots = category_extractor.graph.roots();
-        // for r in &roots {
-        //     let label = category_extractor.graph.get_vertex_label(*r);
-        //     println!("{}: {}", r, label);
-        //     let lu8 = label.as_bytes();
-        //     println!("{:x?}", lu8);
-        // }
-
-        let found_root = if !args.search.is_empty() {
-            match category_extractor.graph.find_vertex(&args.search) {
-                None => roots.get(0).map(|x|*x),
-                some => some,
-            }
-        } else {
-            roots.get(0).map(|x|*x)
-        };
-
-        if let Some(root) = found_root {
-            let repo = Repository::init("../wikiquotes-repo")?;
-            let mut hashes: HashMap<category_graph::Nd, Oid> = HashMap::new();
-
-            let cnt = category_extractor
-                .graph
-                .walk_dfs_post_order(root, |n, forbidden| {
-                    let v_label = category_extractor.graph.get_vertex_label(n);
-                    let name_blob = repo.blob(v_label.as_bytes())?;
-                    let mut builder = repo.treebuilder(None)?;
-                    builder.insert("name.txt", name_blob, 0o100644)?;
-                    let data = &category_extractor.graph.node_data[n];
-                    for out in &data.outgoing {
-                        if !forbidden.contains(out) {
-                            let name = get_git_file_name(&category_extractor.graph, n, *out);
-                            let h = hashes.get(out).expect("Children should be already added");
-                            builder.insert(name, *h, 0o040000)?;
-                        }
-                    }
-                    let tree = builder.write()?;
-                    hashes.insert(n, tree);
-                    Ok(())
-                })?;
-
-            let root_h = hashes.get(&root).unwrap();
-            let root_t = repo.find_tree(*root_h)?;
-            let signature = Signature::now("Tomasz", "x@y.com")?;
-            let commit = repo.commit(None, &signature, &signature, "test", &root_t, &[])?;
-            println!("commit is {}", commit.to_string());
-
-            let c = repo.find_commit(commit)?;
-            repo.branch("master", &c, false)?;
-
-            println!(
-                "Visited {} out of {} nodes.",
-                cnt,
-                category_extractor.graph.len()
-            )
-        } else {
-            println!("No start category given.")
-        }
-    }
-
     Result::Ok(())
+}
+
+fn store_categories_in_git(cat_data: CategoryData) -> Result<(), Box<dyn Error>> {
+    let CategoryData(graph, root, _visited) = cat_data;
+
+    let repo = Repository::init("../wikiquotes-repo")?;
+    let mut hashes: HashMap<category_graph::Nd, Oid> = HashMap::new();
+
+    let _visited = graph
+        .walk_dfs_post_order(root, |n, forbidden| {
+            let v_label = graph.get_vertex_label(n);
+            let name_blob = repo.blob(v_label.as_bytes())?;
+            let mut builder = repo.treebuilder(None)?;
+            builder.insert("name.txt", name_blob, 0o100644)?;
+            let data = &graph.node_data[n];
+            for out in &data.outgoing {
+                if !forbidden.contains(out) {
+                    let name = get_git_file_name(&graph, n, *out);
+                    let h = hashes.get(out).expect("Children should be already added");
+                    builder.insert(name, *h, 0o040000)?;
+                }
+            }
+            let tree = builder.write()?;
+            hashes.insert(n, tree);
+            Ok(())
+        })?;
+
+    let root_h = hashes.get(&root).unwrap();
+    let root_t = repo.find_tree(*root_h)?;
+    let signature = Signature::now("WikiQuotes", "anonymous@pl.wikiquote.org")?;
+    let commit = repo.commit(None, &signature, &signature, "init repo", &root_t, &[])?;
+    println!("commit is {}", commit.to_string());
+
+    let c = repo.find_commit(commit)?;
+    repo.branch("master", &c, false)?;
+
+    Ok(())
 }
 
 fn get_git_file_name(graph: &Graph, from: category_graph::Nd, to: category_graph::Nd) -> String {
@@ -324,4 +379,12 @@ fn get_git_file_name(graph: &Graph, from: category_graph::Nd, to: category_graph
         graph.get_vertex_label(to)
     };
     name.replace("/", "-")
+}
+
+fn count_ones(visited: &BitVec) -> usize {
+    let mut cnt: usize = 0;
+    for b in visited.blocks() {
+        cnt += b.count_ones() as usize;
+    }
+    cnt
 }

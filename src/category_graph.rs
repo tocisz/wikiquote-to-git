@@ -81,7 +81,15 @@ impl Graph {
         self.edge_labels.get(e).unwrap()
     }
 
-    pub fn walk_dfs_post_order<F>(&self, start: Nd, mut f: F) -> Result<usize, Box<dyn Error>>
+    /// Walk graph DFS post order.
+    ///
+    /// # Arguments
+    /// * `start` - start node
+    /// * `f` - visiting function
+    ///
+    /// # Return value
+    /// Bit vector representing visited nodes.
+    pub fn walk_dfs_post_order<F>(&self, start: Nd, mut f: F) -> Result<BitVec, Box<dyn Error>>
     where
         F: FnMut(Nd, &Vec<Nd>) -> Result<(), Box<dyn Error>>,
     {
@@ -126,11 +134,7 @@ impl Graph {
             }
         }
 
-        let mut cnt: usize = 0;
-        for b in visited.blocks() {
-            cnt += b.count_ones() as usize;
-        }
-        Ok(cnt)
+        Ok(visited)
     }
 }
 
@@ -161,8 +165,12 @@ impl CategoryExtractor {
                 // println!("TARGET: {}", target_name);
                 let mut extr = TextExtractor::new();
                 extr.extract_nodes_text(ordinal);
-                let label = extr.result().trim().to_string();
-                // println!("ORD: {}", &label);
+                let mut label = extr.result().trim().to_string();
+                if label.is_empty()
+                    || label.len() == 1 && !label.chars().next().unwrap().is_alphanumeric()
+                {
+                    label = self.site.clone();
+                }
                 self.graph.add(target_name, label, self.site.clone())
             }
             Node::DefinitionList { items, .. } => {
