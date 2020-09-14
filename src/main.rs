@@ -179,7 +179,8 @@ struct CategoryData (
 fn do_main(cfg: Config, args: Opt) -> Result<(), Box<dyn Error>> {
     if args.command == Command::CATS {
         let cat_data = process_categories(&args, get_reader(&cfg)?)?;
-        store_categories_in_git(cat_data)?;
+        // add_articles_to_git(&cat_data, get_reader(&cfg)?)?;
+        store_categories_in_git(&cat_data)?;
     } else {
         add_articles(&args, get_reader(&cfg)?)?;
     }
@@ -237,21 +238,23 @@ fn process_categories(
         match result {
             Err(error) => return Err(Box::new(MediawikiParseError(error))),
             Ok(page) => {
-                if page.title.starts_with("Kategoria:") {
-                    let site_name = category_extractor
-                        .normalizer
-                        .normalize_category_name(&page.title);
-                    // println!("SITE: {}", site_name);
-                    let parsed = create_configuration().parse(&page.text);
-                    category_extractor.set_site(site_name);
-                    category_extractor.extract(&parsed);
-                };
+                // if page.title.starts_with("Kategoria:") {
+                let (site_name,is_category) = category_extractor
+                    .normalizer
+                    .normalize_category_name(&page.title);
+                // println!("SITE: {}", site_name);
+                let parsed = create_configuration().parse(&page.text);
+                category_extractor.set_site(site_name);
+                category_extractor.set_is_category(is_category);
+                category_extractor.extract(&parsed);
+                // };
             }
         }
     }
 
     let found_root = if !args.search.is_empty() {
-        match category_extractor.graph.find_vertex(&args.search) {
+        let search = (args.search.clone(), true);
+        match category_extractor.graph.find_vertex(&search) {
             None => {
                 let roots = category_extractor.graph.roots();
                 roots.get(0).map(|x| *x)
@@ -302,7 +305,7 @@ fn add_articles(args: &Opt, source: impl std::io::BufRead) -> Result<(), Box<dyn
                             page.namespace, page.title, page.format, page.model
                         );
                         let parsed = create_configuration().parse(&page.text);
-                        let mut extr = Cites::new();
+                        let mut extr = Cites::default();
                         extr.extract_cites(&parsed, &page.title);
                         if args.command == Command::PARSE {
                             for cite in extr.cites {
@@ -334,18 +337,37 @@ fn add_articles(args: &Opt, source: impl std::io::BufRead) -> Result<(), Box<dyn
     Result::Ok(())
 }
 
-fn store_categories_in_git(cat_data: CategoryData) -> Result<(), Box<dyn Error>> {
+// fn add_articles_to_git(cat_data: &CategoryData, source: impl std::io::BufRead) -> Result<(), Box<dyn Error>> {
+//     let CategoryData(graph, root, _visited) = cat_data;
+//     let normalizer = Normalizer::default();
+//     for result in parse_mediawiki_dump::parse(source) {
+//         match result {
+//             Err(error) => {
+//                 eprintln!("Error: {}", error);
+//                 std::process::exit(1);
+//             }
+//             Ok(page) => {
+//                 let title = normalizer.normalize_category_name(&page.title);
+//
+//             }
+//         }
+//     }
+//     Result::Ok(())
+// }
+
+fn store_categories_in_git(cat_data: &CategoryData) -> Result<(), Box<dyn Error>> {
     let CategoryData(graph, root, _visited) = cat_data;
 
     let repo = Repository::init("../wikiquotes-repo")?;
     let mut hashes: HashMap<category_graph::Nd, Oid> = HashMap::new();
 
     let _visited = graph
-        .walk_dfs_post_order(root, |n, forbidden| {
+        .walk_dfs_post_order(*root, |n, forbidden| {
             let v_label = graph.get_vertex_label(n);
-            let name_blob = repo.blob(v_label.as_bytes())?;
+            let name_blob = repo.blob(v_label.0.as_bytes())?;
             let mut builder = repo.treebuilder(None)?;
-            builder.insert("name.txt", name_blob, 0o100644)?;
+            let blob_name = if v_label.1 { "cat.txt" } else { "art.txt" };
+            builder.insert(blob_name, name_blob, 0o100644)?;
             let data = &graph.node_data[n];
             for out in &data.outgoing {
                 if !forbidden.contains(out) {
@@ -376,7 +398,7 @@ fn get_git_file_name(graph: &Graph, from: category_graph::Nd, to: category_graph
     let name = if !el.is_empty() {
         el
     } else {
-        graph.get_vertex_label(to)
+        graph.get_vertex_label(to).0.as_ref()
     };
     name.replace("/", "-")
 }

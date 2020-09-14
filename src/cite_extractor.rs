@@ -3,7 +3,7 @@ use parse_wiki_text::{self, Node, Output};
 use serde::Serialize;
 use std::fmt;
 
-#[derive(Serialize)]
+#[derive(Serialize,Default)]
 pub struct Cites {
     pub cites: Vec<Cite>,
 }
@@ -52,10 +52,6 @@ impl fmt::Display for Cite {
 }
 
 impl Cites {
-    pub fn new() -> Cites {
-        Cites { cites: Vec::new() }
-    }
-
     pub fn extract_cites(&mut self, parsed: &Output, title: &str) {
         let mut breadcrumbs = Breadcrumbs::new(title);
         for node in &parsed.nodes {
@@ -68,7 +64,7 @@ impl Cites {
                         let mut cite = Cite::new(extr.result());
                         cite.sections = breadcrumbs.stack.clone();
 
-                        let mut meta_reader = MetaReader::new();
+                        let mut meta_reader = MetaReader::default();
                         meta_reader.read(&item.nodes);
                         cite.meta = meta_reader.meta;
 
@@ -113,15 +109,12 @@ impl Breadcrumbs {
     }
 }
 
+#[derive(Default)]
 struct MetaReader {
     meta: Vec<MetaData>,
 }
 
 impl MetaReader {
-    pub fn new() -> MetaReader {
-        MetaReader { meta: Vec::new() }
-    }
-
     pub fn read(&mut self, items: &Vec<Node>) {
         for item in items {
             match item {

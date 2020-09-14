@@ -14,7 +14,7 @@ pub type Ed = (Nd, Nd);
 #[derive(Default, Debug)]
 pub struct Graph {
     pub node_data: Vec<NodeData>,
-    node_labels: BiMap<Nd, String>,
+    node_labels: BiMap<Nd, (String, bool)>,
     edge_labels: HashMap<Ed, String>,
 }
 
@@ -29,7 +29,7 @@ impl Graph {
         self.node_data.len()
     }
 
-    pub fn add_vertex(&mut self, label: String) -> Nd {
+    pub fn add_vertex(&mut self, label: (String, bool)) -> Nd {
         let new_idx = self.node_data.len();
         self.node_data.push(NodeData::default());
         self.node_labels.insert(new_idx, label);
@@ -45,17 +45,17 @@ impl Graph {
         }
     }
 
-    pub fn add(&mut self, vtx1: String, edge: String, vtx2: String) {
+    pub fn add(&mut self, vtx1: (String, bool), edge: String, vtx2: (String, bool)) {
         let v1 = self.find_or_add_vertex(vtx1);
         let v2 = self.find_or_add_vertex(vtx2);
         self.add_edge((v1, v2), edge);
     }
 
-    pub fn find_vertex(&self, label: &String) -> Option<Nd> {
-        self.node_labels.get_by_right(label).map(|x| *x)
+    pub fn find_vertex(&self, label: &(String, bool)) -> Option<Nd> {
+        self.node_labels.get_by_right(&label).map(|x| *x)
     }
 
-    pub fn find_or_add_vertex(&mut self, label: String) -> Nd {
+    pub fn find_or_add_vertex(&mut self, label: (String,bool)) -> Nd {
         if let Some(n) = self.find_vertex(&label) {
             n
         } else {
@@ -73,7 +73,7 @@ impl Graph {
         result
     }
 
-    pub fn get_vertex_label(&self, id: Nd) -> &str {
+    pub fn get_vertex_label(&self, id: Nd) -> &(String, bool) {
         self.node_labels.get_by_left(&id).unwrap()
     }
 
@@ -111,7 +111,7 @@ impl Graph {
                     let child_label = self.get_vertex_label(next_child);
                     println!(
                         "Found loop between '{}' ({}) and '{}' ({})",
-                        node_label, node, child_label, next_child
+                        node_label.0, node, child_label.0, next_child
                     );
                     match edge_cuts.get_mut(&node) {
                         None => {
@@ -141,6 +141,7 @@ impl Graph {
 #[derive(Default, Debug)]
 pub struct CategoryExtractor {
     site: String,
+    is_category: bool,
     pub graph: Graph,
     pub normalizer: Normalizer,
 }
@@ -148,6 +149,10 @@ pub struct CategoryExtractor {
 impl CategoryExtractor {
     pub fn set_site(&mut self, site: String) {
         self.site = site
+    }
+
+    pub fn set_is_category(&mut self, is_category: bool) {
+        self.is_category = is_category;
     }
 
     pub fn extract(&mut self, parsed: &Output) {
@@ -161,7 +166,10 @@ impl CategoryExtractor {
             Node::Category {
                 target, ordinal, ..
             } => {
-                let target_name = self.normalizer.normalize_category_name(*target);
+                let target = self.normalizer.normalize_category_name(*target);
+                if !target.1 {
+                    panic!("Category target '{}' is not a category!", target.0);
+                }
                 // println!("TARGET: {}", target_name);
                 let mut extr = TextExtractor::new();
                 extr.extract_nodes_text(ordinal);
@@ -171,7 +179,7 @@ impl CategoryExtractor {
                 {
                     label = self.site.clone();
                 }
-                self.graph.add(target_name, label, self.site.clone())
+                self.graph.add(target, label, (self.site.clone(), self.is_category))
             }
             Node::DefinitionList { items, .. } => {
                 for item in items {
@@ -245,7 +253,7 @@ impl Default for Normalizer {
     fn default() -> Self {
         let left_to_right = "\u{200E}";
         Self {
-            kat_match: RegexBuilder::new(r"^Kategoria:")
+            kat_match: RegexBuilder::new(r"^(Kategoria|Category):")
                 .case_insensitive(true)
                 .build()
                 .unwrap(),
@@ -258,12 +266,16 @@ impl Default for Normalizer {
 }
 
 impl Normalizer {
-    pub fn normalize_category_name(&self, s: &str) -> String {
+    pub fn normalize_category_name(&self, s: &str) -> (String, bool) {
         let mut s = s;
+        let is_category;
         if self.kat_match.is_match(s) {
-            s = &s[10..];
+            let i = s.find(':').unwrap()+1;
+            s = &s[i..];
+            is_category = true;
         } else {
             s = s;
+            is_category = false;
         }
         s = s.trim();
         let s = self.space_match.replace_all(s, " ");
@@ -271,7 +283,7 @@ impl Normalizer {
         for ch in &self.bad_chars {
             s = s.replace(*ch, "");
         }
-        s
+        (s,is_category)
     }
 }
 
@@ -279,41 +291,5 @@ impl Normalizer {
 impl Debug for Normalizer {
     fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
         Result::Ok(())
-    }
-}
-
-impl<'a> dot::Labeller<'a, Nd, Ed> for Graph {
-    fn graph_id(&'a self) -> dot::Id<'a> {
-        dot::Id::new("categories").unwrap()
-    }
-    fn node_id(&'a self, n: &Nd) -> dot::Id<'a> {
-        dot::Id::new(format!("N{}", n)).unwrap()
-    }
-    fn node_label(&self, n: &Nd) -> dot::LabelText {
-        dot::LabelText::LabelStr(self.node_labels.get_by_left(n).unwrap().into())
-    }
-    fn edge_label(&self, e: &Ed) -> dot::LabelText {
-        dot::LabelText::LabelStr(self.edge_labels.get(e).unwrap().into())
-    }
-}
-
-impl<'a> dot::GraphWalk<'a, Nd, Ed> for Graph {
-    fn nodes(&self) -> dot::Nodes<'a, Nd> {
-        (0..self.node_data.len()).collect()
-    }
-    fn edges(&'a self) -> dot::Edges<'a, Ed> {
-        let mut edges: Vec<Ed> = Vec::new();
-        for (n, data) in self.node_data.iter().enumerate() {
-            for m in &data.outgoing {
-                edges.push((n, *m));
-            }
-        }
-        dot::Edges::from(edges)
-    }
-    fn source(&self, e: &Ed) -> Nd {
-        e.0
-    }
-    fn target(&self, e: &Ed) -> Nd {
-        e.1
     }
 }
