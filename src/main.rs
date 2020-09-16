@@ -150,31 +150,23 @@ impl FromStr for Command {
 #[derive(Debug, StructOpt)]
 #[structopt(name = "wikiquote", about = "Parse wikiquotes.")]
 struct Opt {
-    #[structopt(short = "c", long, default_value = "parse")]
+    #[structopt(short = "c", default_value = "parse")]
     command: Command,
+
+    #[structopt(short = "d")]
+    datafile: String,
+
+    #[structopt(short = "o")]
+    output: String,
 
     #[structopt(default_value)]
     search: String,
 }
 
-#[derive(Debug)]
-struct Config {
-    datafile: String,
-}
-
-impl ::std::default::Default for Config {
-    fn default() -> Self {
-        Self {
-            datafile: "plwikiquote-20200901-pages-articles.xml.bz2".to_string(),
-        }
-    }
-}
-
 fn main() {
-    let cfg = Config::default();
     let args: Opt = Opt::from_args();
 
-    match do_main(cfg, args) {
+    match do_main(args) {
         Ok(()) => {}
         Err(e) => eprintln!("ERROR: {}", e),
     }
@@ -182,19 +174,19 @@ fn main() {
 
 struct CategoryData(Graph, category_graph::Nd, BitVec);
 
-fn do_main(cfg: Config, args: Opt) -> Result<(), Box<dyn Error>> {
+fn do_main(args: Opt) -> Result<(), Box<dyn Error>> {
     if args.command == Command::CATS {
-        let repo = Repository::init("../wikiquotes-repo2")?;
-        let cat_data = process_categories(&args, get_reader(&cfg)?)?;
-        let cite_hashes = add_articles_to_git(&cat_data, get_reader(&cfg)?, &repo)?;
+        let repo = Repository::init(&args.output)?;
+        let cat_data = process_categories(&args, get_reader(&args)?)?;
+        let cite_hashes = add_articles_to_git(&cat_data, get_reader(&args)?, &repo)?;
         store_categories_in_git(&cat_data, cite_hashes, repo)?;
     } else {
-        add_articles(&args, get_reader(&cfg)?)?;
+        add_articles(&args, get_reader(&args)?)?;
     }
     Ok(())
 }
 
-fn get_reader(cfg: &Config) -> Result<Box<dyn std::io::BufRead>, Box<dyn Error>> {
+fn get_reader(cfg: &Opt) -> Result<Box<dyn std::io::BufRead>, Box<dyn Error>> {
     let file = std::io::BufReader::new(std::fs::File::open(&cfg.datafile)?);
 
     let reader: Box<dyn std::io::BufRead> = if cfg.datafile.ends_with(".bz2") {

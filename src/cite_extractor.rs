@@ -41,7 +41,7 @@ impl MetaData {
 impl fmt::Display for Cite {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if !self.sections.is_empty() {
-            writeln!(f, "Section: {}", self.sections.join(" / "))?;
+            writeln!(f, "Sekcja: {}", self.sections.join(" / "))?;
         }
         for MetaData { key, value, .. } in &self.meta {
             writeln!(f, "{}: {}", key, value)?;
