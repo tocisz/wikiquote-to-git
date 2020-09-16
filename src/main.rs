@@ -1,10 +1,24 @@
 mod category_graph;
+use crate::category_graph::{CategoryExtractor, Graph, Normalizer};
+
 mod cite_extractor;
+use cite_extractor::Cites;
+
 mod text_extractor;
 
-use cite_extractor::Cites;
+use std::collections::HashMap;
+use std::error::Error;
+use std::fmt::Display;
+use std::str::FromStr;
+use std::string::ParseError;
+
+use bit_vec::BitVec;
+use collecting_hashmap::CollectingHashMap;
+use git2::{Oid, Repository, Signature};
+use parse_mediawiki_dump::Page;
 use parse_wiki_text::{self, Configuration, ConfigurationSource};
 use radix_fmt::radix_36;
+use serde::export::Formatter;
 use structopt::StructOpt;
 
 #[macro_use]
@@ -120,18 +134,6 @@ enum Command {
     DEBUG,
     CATS,
 }
-
-use crate::category_graph::{CategoryExtractor, Graph, Normalizer};
-use bit_vec::BitVec;
-use collecting_hashmap::CollectingHashMap;
-use git2::{Oid, Repository, Signature};
-use parse_mediawiki_dump::Page;
-use serde::export::Formatter;
-use std::collections::HashMap;
-use std::error::Error;
-use std::fmt::Display;
-use std::str::FromStr;
-use std::string::ParseError;
 
 impl FromStr for Command {
     type Err = ParseError;
@@ -345,12 +347,12 @@ fn add_articles_to_git(
                 std::process::exit(1);
             }
             Ok(Page {
-                   format: p_format,
-                   model: p_model,
-                   namespace: p_ns,
-                   text: p_text,
-                   title: p_title,
-               }) => {
+                format: p_format,
+                model: p_model,
+                namespace: p_ns,
+                text: p_text,
+                title: p_title,
+            }) => {
                 if p_ns == 0 && p_format.is_some() && p_model.is_some() {
                     let p_format = p_format.unwrap();
                     let p_model = p_model.unwrap();
@@ -370,16 +372,10 @@ fn add_articles_to_git(
                             }
                         }
                     } else {
-                        println!(
-                            "Skip {} {} {:?} {:?}",
-                            p_ns, p_title, p_format, p_model
-                        );
+                        println!("Skip {} {} {:?} {:?}", p_ns, p_title, p_format, p_model);
                     }
                 } else {
-                    println!(
-                        "Skip {} {} {:?} {:?}",
-                        p_ns, p_title, p_format, p_model
-                    );
+                    println!("Skip {} {} {:?} {:?}", p_ns, p_title, p_format, p_model);
                 }
             }
         }

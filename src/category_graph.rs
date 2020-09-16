@@ -5,6 +5,7 @@ use parse_wiki_text::{DefinitionListItem, ListItem, Node, Output};
 use regex::{Regex, RegexBuilder};
 use serde::export::Formatter;
 use std::collections::{HashMap, HashSet};
+use collecting_hashmap::CollectingHashMap;
 use std::error::Error;
 use std::fmt::Debug;
 
@@ -96,7 +97,7 @@ impl Graph {
         let mut visited = BitVec::from_elem(self.node_data.len(), false);
         let mut stack: Vec<(Nd, usize)> = Vec::new(); // (node, children_visited)
         let mut path: HashSet<usize> = HashSet::new();
-        let mut edge_cuts: HashMap<usize, Vec<usize>> = HashMap::new();
+        let mut edge_cuts: CollectingHashMap<usize, usize> = CollectingHashMap::new();
         stack.push((start, 0));
         while !stack.is_empty() {
             let (node, children_visited) = stack.pop().unwrap();
@@ -113,14 +114,7 @@ impl Graph {
                         "Found loop between '{}' ({}) and '{}' ({})",
                         node_label.0, node, child_label.0, next_child
                     );
-                    match edge_cuts.get_mut(&node) {
-                        None => {
-                            edge_cuts.insert(node, vec![next_child]);
-                        }
-                        Some(v) => {
-                            v.push(next_child);
-                        }
-                    }
+                    edge_cuts.insert(node, next_child);
                 }
                 if !visited.get(next_child).unwrap() {
                     stack.push((next_child, 0));
@@ -128,7 +122,7 @@ impl Graph {
             } else {
                 // all children are visited, so call function (post order)
                 let empty: Vec<usize> = vec![];
-                let forbidden = edge_cuts.get(&node).unwrap_or(&empty);
+                let forbidden = edge_cuts.get_all(&node).unwrap_or(&empty);
                 f(node, forbidden)?;
                 path.remove(&node);
             }
