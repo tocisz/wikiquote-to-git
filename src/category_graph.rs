@@ -55,7 +55,7 @@ impl Graph {
         self.node_labels.get_by_right(&label).map(|x| *x)
     }
 
-    pub fn find_or_add_vertex(&mut self, label: (String,bool)) -> Nd {
+    pub fn find_or_add_vertex(&mut self, label: (String, bool)) -> Nd {
         if let Some(n) = self.find_vertex(&label) {
             n
         } else {
@@ -179,7 +179,8 @@ impl CategoryExtractor {
                 {
                     label = self.site.clone();
                 }
-                self.graph.add(target, label, (self.site.clone(), self.is_category))
+                self.graph
+                    .add(target, label, (self.site.clone(), self.is_category))
             }
             Node::DefinitionList { items, .. } => {
                 for item in items {
@@ -270,7 +271,7 @@ impl Normalizer {
         let mut s = s;
         let is_category;
         if self.kat_match.is_match(s) {
-            let i = s.find(':').unwrap()+1;
+            let i = s.find(':').unwrap() + 1;
             s = &s[i..];
             is_category = true;
         } else {
@@ -283,7 +284,7 @@ impl Normalizer {
         for ch in &self.bad_chars {
             s = s.replace(*ch, "");
         }
-        (s,is_category)
+        (s, is_category)
     }
 }
 

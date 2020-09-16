@@ -3,7 +3,7 @@ use parse_wiki_text::{self, Node, Output};
 use serde::Serialize;
 use std::fmt;
 
-#[derive(Serialize,Default)]
+#[derive(Serialize, Default)]
 pub struct Cites {
     pub cites: Vec<Cite>,
 }

@@ -134,6 +134,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "collecting-hashmap"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46341f0b4913928a5393f4250eb277c04fd0ba16864e340a31dbf8fbccc08ea9"
+
+[[package]]
 name = "encoding_rs"
 version = "0.8.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -418,6 +424,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "radix_fmt"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce082a9940a7ace2ad4a8b7d0b1eac6aa378895f18be598230c5f2284ac05426"
+
+[[package]]
 name = "regex"
 version = "1.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -627,9 +639,12 @@ dependencies = [
  "bimap",
  "bit-vec",
  "bzip2",
+ "collecting-hashmap",
  "git2",
+ "lazy_static",
  "parse_mediawiki_dump",
  "parse_wiki_text",
+ "radix_fmt",
  "regex",
  "serde",
  "serde_derive",
