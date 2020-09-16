@@ -165,7 +165,7 @@ struct Config {
 impl ::std::default::Default for Config {
     fn default() -> Self {
         Self {
-            datafile: "plwikiquote-20200820-pages-articles.xml.bz2".to_string(),
+            datafile: "plwikiquote-20200901-pages-articles.xml.bz2".to_string(),
         }
     }
 }
@@ -371,7 +371,7 @@ fn add_articles_to_git(
                                 let mut extr = Cites::default();
                                 extr.extract_cites(&parsed, &p_title);
                                 for cite in extr.cites {
-                                    let out = cite.text.as_str();
+                                    let out = format!("{}", cite);
                                     let id = repo.blob(out.as_bytes())?;
                                     result.insert(v, id);
                                 }

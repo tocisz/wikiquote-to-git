@@ -41,12 +41,12 @@ impl MetaData {
 impl fmt::Display for Cite {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if !self.sections.is_empty() {
-            writeln!(f, "[{}]", self.sections.join(" / "))?;
+            writeln!(f, "Section: {}", self.sections.join(" / "))?;
         }
-        writeln!(f, "{}", self.text)?;
         for MetaData { key, value, .. } in &self.meta {
-            writeln!(f, " * {}: {}", key, value)?;
+            writeln!(f, "{}: {}", key, value)?;
         }
+        writeln!(f, "\n{}", self.text)?;
         fmt::Result::Ok(())
     }
 }
