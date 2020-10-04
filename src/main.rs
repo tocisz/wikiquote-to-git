@@ -178,7 +178,7 @@ struct CategoryData(Graph, category_graph::Nd, BitVec);
 
 fn do_main(args: Opt) -> Result<(), Box<dyn Error>> {
     if args.command == Command::CATS {
-        let repo = Repository::init(&args.output)?;
+        let repo = Repository::init_bare(&args.output)?;
         let cat_data = process_categories(&args, get_reader(&args)?)?;
         let cite_hashes = add_articles_to_git(&cat_data, get_reader(&args)?, &repo)?;
         store_categories_in_git(&cat_data, cite_hashes, repo)?;
