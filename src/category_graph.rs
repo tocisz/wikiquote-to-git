@@ -3,7 +3,6 @@ use bimap::BiMap;
 use bit_vec::BitVec;
 use parse_wiki_text::{DefinitionListItem, ListItem, Node, Output};
 use regex::{Regex, RegexBuilder};
-use serde::export::Formatter;
 use std::collections::{HashMap, HashSet};
 use collecting_hashmap::CollectingHashMap;
 use std::error::Error;
@@ -269,7 +268,6 @@ impl Normalizer {
             s = &s[i..];
             is_category = true;
         } else {
-            s = s;
             is_category = false;
         }
         s = s.trim();
@@ -284,7 +282,7 @@ impl Normalizer {
 
 // Don't display it
 impl Debug for Normalizer {
-    fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Result::Ok(())
     }
 }
